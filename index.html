@@ -37,6 +37,8 @@ td.rh{background:var(--head);color:var(--mut);text-align:center;position:sticky;
 .rz:hover{background:var(--acc);opacity:.5}
 td.sel{outline:2px solid var(--acc);outline-offset:-2px;background:var(--sel)}
 td.num{text-align:right}
+td a{color:var(--acc);text-decoration:underline}
+td[style*="background"] a{color:#0b57d0}
 td input{width:100%;height:100%;border:0;outline:2px solid var(--acc);background:var(--bg);padding:0;margin:0;box-sizing:border-box}
 #tabs{display:flex;gap:4px;padding:6px 8px;border-top:1px solid var(--line);overflow-x:auto;align-items:center}
 .tab{padding:4px 12px;border:1px solid var(--line);border-radius:6px;cursor:pointer;white-space:nowrap}
@@ -65,15 +67,15 @@ td input{width:100%;height:100%;border:0;outline:2px solid var(--acc);background
 <div id="app">
   <div id="bar">
     <button id="homeb">← Home</button>
-    <input id="bname" title="File ka naam">
+    <input id="bname" title="File name">
     <span id="ref">A1</span>
-    <input id="fx" placeholder="Value ya formula, jaise =SUM(A1:A5)">
+    <input id="fx" placeholder="Value or formula, e.g. =SUM(A1:A5)">
     <button id="b" title="Bold (Ctrl+B)"><b>B</b></button>
     <input type="color" id="bg" value="#fff2a8" title="Cell color" style="width:34px;height:30px;padding:0">
     <button id="nobg">✕ color</button>
     <button id="addr">+ Row</button>
     <button id="addc">+ Col</button>
-    <button id="sortb" title="Selected column ko A→Z sort karo">Sort A→Z</button>
+    <button id="sortb" title="Sort selected column A→Z">Sort A→Z</button>
     <button id="io">Export / Import</button>
   </div>
   <div id="wrap"><table id="t"></table></div>
@@ -81,13 +83,13 @@ td input{width:100%;height:100%;border:0;outline:2px solid var(--acc);background
 </div>
 
 <div id="dlg"><div>
-  <p>CSV ya backup (JSON) yahan copy karein, ya paste karke import karein.</p>
+  <p>Copy your CSV or backup (JSON) here, or paste data to import it.</p>
   <textarea id="ta"></textarea>
   <div id="dbt">
-    <button id="exc">Is sheet ka CSV</button>
-    <button id="exj">Poora backup (JSON)</button>
+    <button id="exc">Export sheet as CSV</button>
+    <button id="exj">Full backup (JSON)</button>
     <button id="cp">Copy</button>
-    <button id="imc">Import CSV (is sheet mein)</button>
+    <button id="imc">Import CSV into this sheet</button>
     <button id="imj">Restore backup</button>
     <button id="cl">Close</button>
   </div>
@@ -138,6 +140,11 @@ function calc(e){
 function fmt(v){return typeof v==='number'?String(parseFloat(v.toFixed(8))):String(v)}
 const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const cw=(s,c)=>s.widths[c]||DW;
+function disp(v){if(v==='')return'';const t=fmt(v);
+  if(typeof v==='string'){let h=null;
+    if(/^https?:\/\/\S+$/i.test(t))h=t;else if(/^www\.\S+\.\S+$/i.test(t))h='https://'+t;else if(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t))h='mailto:'+t;
+    if(h)return`<a href="${esc(h)}" target="_blank" rel="noopener noreferrer">${esc(t)}</a>`}
+  return esc(t)}
 function tw(){const s=sh();let t=RW;for(let c=0;c<s.cols;c++)t+=cw(s,c);$('t').style.width=t+'px'}
 
 /* ---------- home ---------- */
@@ -145,7 +152,7 @@ function home(){
   cur=null;editing=false;$('app').style.display='none';$('home').style.display='block';
   const l=$('list');l.innerHTML='';
   const bs=[...DB.books].sort((a,b)=>b.updated-a.updated);
-  if(!bs.length)l.innerHTML='<p class="meta">Abhi koi sheet nahi hai. "+ New sheet" dabayein ya Excel file upload karein.</p>';
+  if(!bs.length)l.innerHTML='<p class="meta">No sheets yet. Click "+ New sheet" or upload an Excel file.</p>';
   bs.forEach(b=>{
     const d=document.createElement('div');d.className='card';
     const nm=document.createElement('div');nm.className='nm';nm.textContent=b.name;
@@ -158,7 +165,7 @@ function home(){
     rn.onclick=e=>{e.stopPropagation();const i=document.createElement('input');i.value=b.name;nm.textContent='';nm.appendChild(i);i.focus();i.select();
       i.onclick=ev2=>ev2.stopPropagation();i.onblur=()=>{b.name=i.value.trim()||b.name;save();home()};i.onkeydown=ev2=>{if(ev2.key==='Enter')i.blur()}};
     let arm=0;
-    dl.onclick=e=>{e.stopPropagation();if(!arm){arm=1;dl.textContent='Pakka? Dobara dabayein';setTimeout(()=>{arm=0;dl.textContent='Delete'},3000)}
+    dl.onclick=e=>{e.stopPropagation();if(!arm){arm=1;dl.textContent='Click again to confirm';setTimeout(()=>{arm=0;dl.textContent='Delete'},3000)}
       else{DB.books=DB.books.filter(x=>x!==b);save();home()}};
     l.appendChild(d);
   });
@@ -170,7 +177,7 @@ $('homeb').onclick=()=>{save();home()};
 $('bname').onchange=()=>{cur.name=$('bname').value.trim()||'Untitled';save()};
 $('up').onchange=async e=>{
   const f=e.target.files[0];e.target.value='';if(!f)return;
-  if(!window.XLSX){msg('Excel library load nahi hui. Internet check karke page dobara kholein.');return}
+  if(!window.XLSX){msg('Excel library failed to load. Check your internet connection and reload the page.');return}
   try{
     const wb=XLSX.read(await f.arrayBuffer(),{type:'array',cellDates:true});
     const sheets=wb.SheetNames.map(n=>{
@@ -180,10 +187,10 @@ $('up').onchange=async e=>{
         if(v===''||v==null)return;if(v instanceof Date)v=v.toLocaleDateString('en-GB');
         s.cells[r+','+c]={v:String(v)}})});
       s.rows=Math.max(100,rows.length+20);s.cols=Math.max(26,mc+1);return s});
-    if(!sheets.length){msg('File khali hai.');return}
+    if(!sheets.length){msg('The file is empty.');return}
     const b={id:uid(),name:f.name.replace(/\.[^.]+$/,''),updated:Date.now(),sheets,active:0};
     DB.books.push(b);cur=b;save();openBook(b);
-  }catch(err){msg('File padh nahi payi. Sahi .xlsx, .xls ya .csv file chunein.')}
+  }catch(err){msg('Could not read the file. Please choose a valid .xlsx, .xls or .csv file.')}
 };
 
 /* ---------- sheet view ---------- */
@@ -191,12 +198,12 @@ function render(){
   cache={};const s=sh();let h=`<colgroup><col style="width:${RW}px">`;
   for(let c=0;c<s.cols;c++)h+=`<col style="width:${cw(s,c)}px">`;
   h+='</colgroup><thead><tr><th class="rh"></th>';
-  for(let c=0;c<s.cols;c++)h+=`<th>${cn(c)}<i class="rz" data-c="${c}" title="Drag karke chora/chhota karein, double-click = reset"></i></th>`;
+  for(let c=0;c<s.cols;c++)h+=`<th>${cn(c)}<i class="rz" data-c="${c}" title="Drag to resize, double-click to reset"></i></th>`;
   h+='</tr></thead><tbody>';
   for(let r=0;r<s.rows;r++){h+=`<tr><td class="rh">${r+1}</td>`;
     for(let c=0;c<s.cols;c++){const x=s.cells[r+','+c]||{},v=ev(r,c);
       const st=(x.b?'font-weight:700;':'')+(x.bg?`background:${x.bg};color:#1f2328;`:'');
-      h+=`<td data-r="${r}" data-c="${c}" class="${typeof v==='number'?'num ':''}${r===sel.r&&c===sel.c?'sel':''}" style="${st}">${esc(v===''?'':fmt(v))}</td>`}
+      h+=`<td data-r="${r}" data-c="${c}" class="${typeof v==='number'?'num ':''}${r===sel.r&&c===sel.c?'sel':''}" style="${st}">${disp(v)}</td>`}
     h+='</tr>'}
   $('t').innerHTML=h+'</tbody>';tw();
   $('ref').textContent=cn(sel.c)+(sel.r+1);$('fx').value=raw(sel.r,sel.c);
@@ -211,7 +218,7 @@ function tabs(){
     t.appendChild(d)});
   const a=document.createElement('button');a.textContent='+ Sheet';a.onclick=()=>{cur.sheets.push(mk('Sheet '+(cur.sheets.length+1)));cur.active=cur.sheets.length-1;sel={r:0,c:0};save();render()};t.appendChild(a);
   if(cur.sheets.length>1){const d=document.createElement('button');d.textContent='Delete sheet';let arm=0;
-    d.onclick=()=>{if(!arm){arm=1;d.textContent='Pakka? Dobara dabayein';setTimeout(()=>{arm=0;d.textContent='Delete sheet'},3000)}else{cur.sheets.splice(cur.active,1);cur.active=0;sel={r:0,c:0};save();render()}};t.appendChild(d)}
+    d.onclick=()=>{if(!arm){arm=1;d.textContent='Click again to confirm';setTimeout(()=>{arm=0;d.textContent='Delete sheet'},3000)}else{cur.sheets.splice(cur.active,1);cur.active=0;sel={r:0,c:0};save();render()}};t.appendChild(d)}
 }
 function setv(r,c,v){const k=r+','+c,s=sh();const x=s.cells[k]||(s.cells[k]={});x.v=v;if(v===''&&!x.b&&!x.bg)delete s.cells[k];save()}
 function clamp(r,c){return{r:Math.max(0,Math.min(sh().rows-1,r)),c:Math.max(0,Math.min(sh().cols-1,c))}}
@@ -231,7 +238,7 @@ function edit(r,c,init){
 $('t').addEventListener('click',e=>{const td=e.target.closest('td[data-r]');if(td&&!editing)go(+td.dataset.r,+td.dataset.c)});
 $('t').addEventListener('dblclick',e=>{
   const z=e.target.closest('.rz');if(z){delete sh().widths[+z.dataset.c];save();render();return}
-  const td=e.target.closest('td[data-r]');if(td)edit(+td.dataset.r,+td.dataset.c)});
+  const td=e.target.closest('td[data-r]');if(td&&!e.target.closest('a'))edit(+td.dataset.r,+td.dataset.c)});
 $('t').addEventListener('pointerdown',e=>{
   const z=e.target.closest('.rz');if(!z)return;e.preventDefault();
   const c=+z.dataset.c,s=sh(),x0=e.clientX,w0=cw(s,c),col=$('t').querySelectorAll('col')[c+1];
@@ -287,7 +294,7 @@ $('imc').onclick=()=>{if(!cur)return;const rows=parse($('ta').value),s=sh();
 $('imj').onclick=()=>{try{const d=JSON.parse($('ta').value);
   const add=d.books||(d.sheets?[{name:'Restored',sheets:d.sheets,active:0}]:null);if(!add)throw 0;
   add.forEach(b=>{if(b.sheets&&b.sheets.length)DB.books.push({id:uid(),name:b.name||'Restored',updated:Date.now(),sheets:b.sheets,active:0})});
-  cur=null;save();$('dlg').style.display='none';home()}catch(e){$('ta').value='JSON sahi nahi hai.'}};
+  cur=null;save();$('dlg').style.display='none';home()}catch(e){$('ta').value='Invalid JSON.'}};
 
 if(DB.books.length===0)save();
 home();
